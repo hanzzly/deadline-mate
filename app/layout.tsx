@@ -12,6 +12,7 @@ export const metadata: Metadata = {
     "Bantu siswa dan pekerja mengatur deadline dengan mudah. Simpel, cepat, dan tanpa ribet login.",
   keywords: ["deadline", "task manager", "productivity", "siswa", "pekerja", "tugas"],
   authors: [{ name: "Deadline Mate" }],
+    generator: 'v0.app'
 }
 
 export const viewport: Viewport = {

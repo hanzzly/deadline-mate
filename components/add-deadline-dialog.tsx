@@ -1,186 +1,188 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import Link from "next/link"
+import React from "react"
+
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { ThemeToggle } from "@/components/theme-toggle"
-import { DeadlineCard } from "@/components/deadline-card"
-import { AddDeadlineDialog } from "@/components/add-deadline-dialog"
-import { EmptyState } from "@/components/empty-state"
-import { StatsCards } from "@/components/stats-cards"
-import { FilterTabs, type FilterOption } from "@/components/filter-tabs"
-import { Clock, ArrowLeft, Plus } from "lucide-react"
-import type { Deadline } from "@/lib/types"
-import { 
-  getDeadlines, 
-  addDeadline, 
-  deleteDeadline, 
-  toggleDeadlineComplete 
-} from "@/lib/deadline-store"
-import { sortDeadlines, getTimeRemaining } from "@/lib/deadline-utils"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Plus } from "lucide-react"
+import type { Deadline, DeadlineCategory, DeadlinePriority } from "@/lib/types"
 
-export default function AppPage() {
-  const [deadlines, setDeadlines] = useState<Deadline[]>([])
-  const [filter, setFilter] = useState<FilterOption>("all")
-  const [isLoaded, setIsLoaded] = useState(false)
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+interface AddDeadlineDialogProps {
+  onAdd: (deadline: Omit<Deadline, 'id' | 'createdAt'>) => void
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+}
 
-  // Load deadlines from localStorage on mount
-  useEffect(() => {
-    const stored = getDeadlines()
-    setDeadlines(stored)
-    setIsLoaded(true)
-
-    // Store current session start time in sessionStorage
-    sessionStorage.setItem('deadline-mate-session', new Date().toISOString())
-  }, [])
-
-  const handleAddDeadline = (newDeadline: Omit<Deadline, 'id' | 'createdAt'>) => {
-    const deadline = addDeadline(newDeadline)
-    setDeadlines(prev => [...prev, deadline])
+export function AddDeadlineDialog({ onAdd, open: controlledOpen, onOpenChange }: AddDeadlineDialogProps) {
+  const [internalOpen, setInternalOpen] = useState(false)
+  
+  const isControlled = controlledOpen !== undefined
+  const open = isControlled ? controlledOpen : internalOpen
+  const setOpen = (value: boolean) => {
+    if (isControlled) {
+      onOpenChange?.(value)
+    } else {
+      setInternalOpen(value)
+    }
   }
+  const [title, setTitle] = useState("")
+  const [description, setDescription] = useState("")
+  const [dueDate, setDueDate] = useState("")
+  const [dueTime, setDueTime] = useState("")
+  const [category, setCategory] = useState<DeadlineCategory>("study")
+  const [priority, setPriority] = useState<DeadlinePriority>("medium")
 
-  const handleToggleComplete = (id: string) => {
-    toggleDeadlineComplete(id)
-    setDeadlines(prev => 
-      prev.map(d => d.id === id ? { ...d, completed: !d.completed } : d)
-    )
-  }
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!title.trim() || !dueDate) return
 
-  const handleDeleteDeadline = (id: string) => {
-    deleteDeadline(id)
-    setDeadlines(prev => prev.filter(d => d.id !== id))
-  }
-
-  const handleOpenAddDialog = () => {
-    setIsAddDialogOpen(true)
-  }
-
-  // Calculate filter counts
-  const counts = {
-    all: deadlines.length,
-    pending: deadlines.filter(d => !d.completed).length,
-    completed: deadlines.filter(d => d.completed).length,
-    overdue: deadlines.filter(d => {
-      if (d.completed) return false
-      const { isOverdue } = getTimeRemaining(d.dueDate, d.dueTime)
-      return isOverdue
-    }).length,
-  }
-
-  // Filter and sort deadlines
-  const filteredDeadlines = sortDeadlines(
-    deadlines.filter(d => {
-      switch (filter) {
-        case "pending":
-          return !d.completed
-        case "completed":
-          return d.completed
-        case "overdue":
-          if (d.completed) return false
-          const { isOverdue } = getTimeRemaining(d.dueDate, d.dueTime)
-          return isOverdue
-        default:
-          return true
-      }
+    onAdd({
+      title: title.trim(),
+      description: description.trim() || undefined,
+      dueDate,
+      dueTime: dueTime || undefined,
+      category,
+      priority,
+      completed: false,
     })
-  )
 
-  if (!isLoaded) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <Clock className="h-5 w-5 animate-pulse" />
-          <span>Memuat...</span>
-        </div>
-      </div>
-    )
+    // Reset form
+    setTitle("")
+    setDescription("")
+    setDueDate("")
+    setDueTime("")
+    setCategory("study")
+    setPriority("medium")
+    setOpen(false)
   }
+
+  // Get today's date in YYYY-MM-DD format for min attribute
+  const today = new Date().toISOString().split('T')[0]
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-lg">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6">
-          <div className="flex h-16 items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link 
-                href="/" 
-                className="flex items-center gap-2 text-muted-foreground transition-colors hover:text-foreground"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                <span className="hidden sm:inline">Kembali</span>
-              </Link>
-              <div className="h-6 w-px bg-border" />
-              <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-                  <Clock className="h-4 w-4 text-primary-foreground" />
-                </div>
-                <span className="font-semibold text-foreground">Deadline Mate</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <ThemeToggle />
-              <AddDeadlineDialog 
-                onAdd={handleAddDeadline} 
-                open={isAddDialogOpen} 
-                onOpenChange={setIsAddDialogOpen} 
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button className="gap-2">
+          <Plus className="h-4 w-4" />
+          Tambah Deadline
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[500px]">
+        <form onSubmit={handleSubmit}>
+          <DialogHeader>
+            <DialogTitle>Tambah Deadline Baru</DialogTitle>
+            <DialogDescription>
+              Isi detail deadline yang ingin kamu tambahkan.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="title">Judul *</Label>
+              <Input
+                id="title"
+                placeholder="Contoh: Kumpulin tugas matematika"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                required
               />
             </div>
-          </div>
-        </div>
-      </header>
 
-      {/* Main Content */}
-      <main className="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8">
-        {/* Stats */}
-        <StatsCards deadlines={deadlines} />
-
-        {/* Filter & Actions */}
-        <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <FilterTabs
-            activeFilter={filter}
-            onFilterChange={setFilter}
-            counts={counts}
-          />
-        </div>
-
-        {/* Deadline List */}
-        <div className="mt-6">
-          {deadlines.length === 0 ? (
-            <EmptyState onAddClick={handleOpenAddDialog} />
-          ) : filteredDeadlines.length === 0 ? (
-            <div className="rounded-xl border border-border bg-card p-8 text-center">
-              <p className="text-muted-foreground">
-                Tidak ada deadline di kategori ini.
-              </p>
+            <div className="grid gap-2">
+              <Label htmlFor="description">Deskripsi (opsional)</Label>
+              <Textarea
+                id="description"
+                placeholder="Tambahkan detail atau catatan..."
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={2}
+              />
             </div>
-          ) : (
-            <div className="grid gap-3">
-              {filteredDeadlines.map((deadline) => (
-                <DeadlineCard
-                  key={deadline.id}
-                  deadline={deadline}
-                  onToggleComplete={handleToggleComplete}
-                  onDelete={handleDeleteDeadline}
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="dueDate">Tanggal *</Label>
+                <Input
+                  id="dueDate"
+                  type="date"
+                  min={today}
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  required
                 />
-              ))}
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="dueTime">Waktu (opsional)</Label>
+                <Input
+                  id="dueTime"
+                  type="time"
+                  value={dueTime}
+                  onChange={(e) => setDueTime(e.target.value)}
+                />
+              </div>
             </div>
-          )}
-        </div>
 
-        {/* Mobile FAB */}
-        <div className="fixed bottom-6 right-6 sm:hidden">
-          <Button
-            size="lg"
-            className="h-14 w-14 rounded-full shadow-lg"
-            onClick={handleOpenAddDialog}
-          >
-            <Plus className="h-6 w-6" />
-            <span className="sr-only">Tambah Deadline</span>
-          </Button>
-        </div>
-      </main>
-    </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="category">Kategori</Label>
+                <Select value={category} onValueChange={(v) => setCategory(v as DeadlineCategory)}>
+                  <SelectTrigger id="category">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="study">Belajar</SelectItem>
+                    <SelectItem value="work">Kerja</SelectItem>
+                    <SelectItem value="personal">Pribadi</SelectItem>
+                    <SelectItem value="other">Lainnya</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="priority">Prioritas</Label>
+                <Select value={priority} onValueChange={(v) => setPriority(v as DeadlinePriority)}>
+                  <SelectTrigger id="priority">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="high">Tinggi</SelectItem>
+                    <SelectItem value="medium">Sedang</SelectItem>
+                    <SelectItem value="low">Rendah</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              Batal
+            </Button>
+            <Button type="submit" disabled={!title.trim() || !dueDate}>
+              Simpan
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }
